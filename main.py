@@ -13,6 +13,7 @@ s = storage.Storage(d)
 
 
 class Client:
+    """A basic client which stores temperature readings."""
     def __init__(self, d):
         self._notif_manager = d.lookup_by_requirement(directory.require_method("subscribe"))[1]
         self._notif_manager.subscribe("client", self.handle_event, "storage_status", "temperature")

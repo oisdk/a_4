@@ -6,10 +6,12 @@ class ServiceNotFoundError(RuntimeError):
 
 
 class Directory:
+    """A directory service."""
     def __init__(self):
         self._services = {}
 
     def register(self, name, service):
+        """Registers a new service, and returns its unique name."""
         if name in self._services:
             newname = name
             while newname in self._services:
@@ -19,11 +21,17 @@ class Directory:
         return name
 
     def lookup_by_name(self, name):
+        """Looks up a service given its name. Raises an error if it is not
+        found.
+        """
         if name in self._services:
             return self._services[name]
         raise ServiceNotFoundError("service of name %s not registered" % name)
 
     def lookup_by_requirement(self, requirements):
+        """Takes a predicate and returns a service which satisfies that
+        predicate.
+        """
         for name, service in self._services.items():
             if requirements(service):
                 return name, service
@@ -32,4 +40,5 @@ class Directory:
 
 
 def require_method(method_name):
+    """Generate a predicate for requiring a method with a particular name."""
     return lambda instance: callable(getattr(instance, method_name, None))
