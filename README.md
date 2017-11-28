@@ -10,6 +10,9 @@ Message queues allow servers and clients to interact asynchronously. By separati
 
 Same queue code as from last assignment.
 
+
+The messages from the clients contain a reference to the client queue, as well as a value to request the function with. The response contains a description of the function carried out, as well as the result of calling that function.
+
 New server/client code:
 
 ```python
