@@ -1,47 +1,37 @@
+import queue
 import threading
 import time
-import temperature
-import directory
-import notifications
-import storage
+import random
 
-d = directory.Directory()
-m = notifications.NotificationManager(d)
-t = temperature.Temperature(d, 1)
-t.start()
-s = storage.Storage(d)
+def fib(n):
+    if n == 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return fib(n-1) + fib(n-2)
 
+class Worker(threading.Thread):
+    def __init__(self, queue, number):
+        self._number = number
+        self._queue = queue
+        threading.Thread.__init__(self)
 
-class Client:
-    """A basic client which stores temperature readings."""
-    def __init__(self, d):
-        self._notif_manager = d.lookup_by_requirement(directory.require_method("subscribe"))[1]
-        self._notif_manager.subscribe("client", self.handle_event, "storage_status", "temperature")
-        self._storage = d.lookup_by_requirement(directory.require_method("store"))[1]
-        self._storage.store("temperatures", {})
-        self._continue = True
+    def run(self):
+        while True:
+            val = self._queue.pop()
+            if val is None:
+                break
+            print("Worker %i received message %i" % (self._number, val))
+            print("Worker %i calculated fib for %i: %i" % (self._number, val, fib(val)))
 
-    def handle_event(self, event):
-        if event.topic == "temperature":
-            threading.Thread(target=self.log_temperature, args=(event,)).start()
-        elif event.topic == "storage_status":
-            threading.Thread(target=self.handle_storage_error, args=(event,)).start()
+q = queue.Queue()
+for i in range(10):
+    q.push(random.randrange(35))
 
-    def log_temperature(self, event):
-        if self._continue:
-            def assgn(d):
-                d[time.strftime("%c", event.time)] = event.contents
-                return d
-            self._storage.modify("temperatures", assgn)
-        if self._continue:
-            print(self._storage.retrieve("temperatures"))
-
-    def handle_storage_error(self, event):
-        self._continue = False
-        print(event)
-        self._notif_manager.unsubscribe("client", "temperature", "storage_status")
-
-
-c = Client(d)
-time.sleep(5)
-s.kill()
+w1 = Worker(q, 1)
+w2 = Worker(q, 2)
+w3 = Worker(q, 3)
+w1.start()
+w2.start()
+w3.start()
