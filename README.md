@@ -1,89 +1,40 @@
 Donnacha Oisín Kidney
 115702295
 
-# Assignment 5
+# Assignment 6
 
 ## 1
-A messaging queue is a first-in first-out queue which allows message producers to asynchronously interact with message consumers, by sending out messages when they are ready, and not waiting for them to be consumed. Message queues are asynchronous, meaning that the time a message is consumed is often not the same time the message is created, and they are non-blocking, meaning a message producer can carry out other work before its last message is consumed.
+Message queues allow servers and clients to interact asynchronously. By separating the logic of asynchronous communication from the implementation of either the clients or the servers, they allow for better separation of concerns, simplifying client and server code. They also allow users to choose different persistence levels for messages, making them easily adaptable to different priorities.
 
 ## 2
 
-queue.py:
+Same queue code as from last assignment.
 
-```python
-import threading
-
-class Queue:
-    """A FIFO queue which supports amortized O(1) push and pop."""
-    def __init__(self):
-        self._front = []
-        self._back = []
-        # A lock for threadsafe mutation.
-        self._lock = threading.Lock()
-
-    def push(self, element):
-        """Push an element onto the end of the queue."""
-        with self._lock:
-            self._back.append(element)
-
-    def pop(self):
-        """Pop the next element from the queue."""
-        with self._lock:
-            if self._front:
-                return self._front.pop()
-            elif self._back:
-                res = self._back[0]
-                self._front, self._back = self._back[:0:-1], []
-                return res
-
-    def size(self):
-        """Return the total number of elements in the queue."""
-        with self._lock:
-            return len(self._front) + len(self._back)
-
-    def empty(self):
-        """Return true iff the queue is empty."""
-        with self._lock:
-            return not (self._front or self._back)
-```
-
-main.py:
-
-```python
-import queue
-
-q = queue.Queue()
-q.push(1)
-q.push(2)
-q.push(3)
-print(q.size())
-print(q.pop())
-print(q.pop())
-print(q.pop())
-print(q.size())
-```
-
-output:
-
-```python
-3
-1
-2
-3
-0
-```
-
-## 3
-
-For this task the workers will inefficiently calculate fibonacci numbers from the queue. The locking is managed by the queue structure itself, and the multitasking is handled by the python threading module. The delay is introduced by the time taken to calculate fibonacci numbers.
-
-main.py:
+New server/client code:
 
 ```python
 import queue
 import threading
 import time
 import random
+
+
+class Server(threading.Thread):
+    def __init__(self, number, func):
+        self._number = number
+        self._queue = queue.Queue()
+        self._func = func
+        threading.Thread.__init__(self)
+
+    def run(self):
+        while True:
+            for val, client_queue in iter(self._queue.pop, None):
+                print("Worker %i received message %i" % (self._number, val))
+                client_queue.push(("%s(%s)" % (self._func.__name__, val), self._func(val)))
+            time.sleep(1)
+
+    def __call__(self, client_queue, val):
+        self._queue.push((val, client_queue))
 
 def fib(n):
     if n == 0:
@@ -93,55 +44,81 @@ def fib(n):
     else:
         return fib(n-1) + fib(n-2)
 
-class Worker(threading.Thread):
-    def __init__(self, queue, number):
+def is_prime(n):
+    if n < 2:
+        return False
+    for i in range(2, n):
+        if n % i == 0:
+            return False
+    return True
+
+def fact(n):
+    res = 1
+    for i in range(1, n):
+        res *= i
+    return res
+
+
+class Client(threading.Thread):
+    def __init__(self, number):
+        self._queue = queue.Queue()
         self._number = number
-        self._queue = queue
         threading.Thread.__init__(self)
 
     def run(self):
         while True:
-            val = self._queue.pop()
-            if val is None:
-                break
-            print("Worker %i received message %i" % (self._number, val))
-            print("Worker %i calculated fib for %i: %i" % (self._number, val, fib(val)))
+            while not self._queue.empty():
+                call, val = self._queue.pop()
+                print("client %i: %s = %s" % (self._number, call, val))
+            time.sleep(1)
 
-q = queue.Queue()
-for i in range(10):
-    q.push(random.randrange(35))
+    def __call__(self, server, val):
+        server(self._queue, val)
 
-w1 = Worker(q, 1)
-w2 = Worker(q, 2)
-w3 = Worker(q, 3)
-w1.start()
-w2.start()
-w3.start()
+
+fibs = Server(1, fib)
+primes = Server(2, is_prime)
+facts = Server(3, fact)
+
+c1 = Client(1)
+c2 = Client(2)
+c3 = Client(3)
+
+c1.start()
+c2.start()
+c3.start()
+
+fibs.start()
+primes.start()
+facts.start()
+
+for _ in range(10):
+    random.choice([c1, c2, c3])(random.choice([fibs, primes, facts]), random.randrange(35))
 ```
 
-This is some example output:
+## 3
+
+Output:
 
 ```
+Worker 1 received message 6
+Worker 3 received message 18
+Worker 2 received message 29
+Worker 2 received message 12
+Worker 1 received message 8
+Worker 2 received message 8
 Worker 1 received message 23
-Worker 1 calculated fib for 23: 28657
-Worker 1 received message 5
-Worker 1 calculated fib for 5: 5
-Worker 1 received message 33
-Worker 2 received message 4
-Worker 2 calculated fib for 4: 3
-Worker 2 received message 3
-Worker 2 calculated fib for 3: 2
-Worker 2 received message 31
-Worker 3 received message 12
-Worker 3 calculated fib for 12: 144
-Worker 3 received message 33
-Worker 2 calculated fib for 31: 1346269
-Worker 2 received message 27
-Worker 2 calculated fib for 27: 196418
-Worker 2 received message 30
-Worker 2 calculated fib for 30: 832040
-Worker 3 calculated fib for 33: 3524578
-Worker 1 calculated fib for 33: 3524578
+Worker 1 received message 9
+Worker 1 received message 13
+Worker 1 received message 26
+client 1: fib(6) = 8
+client 2: is_prime(29) = True
+client 1: fact(18) = 355687428096000
+client 2: is_prime(8) = False
+client 1: is_prime(12) = False
+client 2: fib(23) = 28657
+client 1: fib(8) = 21
+client 1: fib(9) = 34
+client 2: fib(13) = 233
+client 1: fib(26) = 121393
 ```
-
-As can be seen on the fifth line (`Worker 1 received message 33`), the first worker takes some time to calculate the expensive call to `fib`. In the meantime, the second and third workers can calculate cheaper calls, without blocking the execution of the first call.
